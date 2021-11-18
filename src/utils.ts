@@ -31,7 +31,10 @@ export async function getValidTags(
   return validTags;
 }
 
-export async function getCommits(baseRef: string, headRef: string) {
+export async function getCommits(
+  baseRef: string,
+  headRef: string
+): Promise<{ message: string; hash: string | null }[]> {
   const commits = await compareCommits(baseRef, headRef);
 
   return commits
@@ -123,9 +126,8 @@ export function mapCustomReleaseRules(customReleaseTypes: string) {
       return true;
     })
     .map((customReleaseRule) => {
-      const [type, release, section] = customReleaseRule.split(
-        releaseTypeSeparator
-      );
+      const [type, release, section] =
+        customReleaseRule.split(releaseTypeSeparator);
       const defaultRule = defaultChangelogRules[type.toLowerCase()];
 
       return {

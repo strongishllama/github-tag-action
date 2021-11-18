@@ -18,6 +18,9 @@ import { Await } from './ts';
 
 export default async function main() {
   const defaultBump = core.getInput('default_bump') as ReleaseType | 'false';
+  const defaultPreReleaseBump = core.getInput('default_prerelease_bump') as
+    | ReleaseType
+    | 'false';
   const tagPrefix = core.getInput('tag_prefix');
   const customTag = core.getInput('custom_tag');
   const releaseBranches = core.getInput('release_branches');
@@ -27,6 +30,7 @@ export default async function main() {
   const dryRun = core.getInput('dry_run');
   const customReleaseRules = core.getInput('custom_release_rules');
   const shouldFetchAllTags = core.getInput('fetch_all_tags');
+  const commitSha = core.getInput('commit_sha');
   const validScopes = core.getInput('scopes');
 
   let mappedReleaseRules;
@@ -41,8 +45,9 @@ export default async function main() {
     return;
   }
 
-  if (!GITHUB_SHA) {
-    core.setFailed('Missing GITHUB_SHA.');
+  const commitRef = commitSha || GITHUB_SHA;
+  if (!commitRef) {
+    core.setFailed('Missing commit_sha or GITHUB_SHA.');
     return;
   }
 
@@ -56,9 +61,11 @@ export default async function main() {
   const isPullRequest = isPr(GITHUB_REF);
   const isPrerelease = !isReleaseBranch && !isPullRequest && isPreReleaseBranch;
 
-  const identifier = appendToPreReleaseTag
-    ? appendToPreReleaseTag
-    : currentBranch;
+  // Sanitize identifier according to
+  // https://semver.org/#backusnaur-form-grammar-for-valid-semver-versions
+  const identifier = (
+    appendToPreReleaseTag ? appendToPreReleaseTag : currentBranch
+  ).replace(/[^a-zA-Z0-9-]/g, '-');
 
   const prefixRegex = new RegExp(`^${tagPrefix}`);
 
@@ -78,7 +85,7 @@ export default async function main() {
   let newVersion: string;
 
   if (customTag) {
-    commits = await getCommits(latestTag.commit.sha, GITHUB_SHA);
+    commits = await getCommits(latestTag.commit.sha, commitRef);
 
     core.setOutput('release_type', 'custom');
     newVersion = customTag;
@@ -114,7 +121,7 @@ export default async function main() {
     core.setOutput('previous_version', previousVersion.version);
     core.setOutput('previous_tag', previousTag.name);
 
-    commits = await getCommits(previousTag.commit.sha, GITHUB_SHA);
+    commits = await getCommits(previousTag.commit.sha, commitRef);
 
     if (validScopes) {
       commits = await getScopedCommits(commits, validScopes.split(','));
@@ -130,11 +137,29 @@ export default async function main() {
       { commits, logger: { log: console.info.bind(console) } }
     );
 
-    if (!bump && defaultBump === 'false') {
+    // Determine if we should continue with tag creation based on main vs prerelease branch
+    let shouldContinue = true;
+    if (isPrerelease) {
+      if (!bump && defaultPreReleaseBump === 'false') {
+        shouldContinue = false;
+      }
+    } else {
+      if (!bump && defaultBump === 'false') {
+        shouldContinue = false;
+      }
+    }
+
+    // Default bump is set to false and we did not find an automatic bump
+    if (!shouldContinue) {
       core.debug(
         'No commit specifies the version bump. Skipping the tag creation.'
       );
       return;
+    }
+
+    // If we don't have an automatic bump for the prerelease, just set our bump as the default
+    if (isPrerelease && !bump) {
+      bump = defaultPreReleaseBump;
     }
 
     // If somebody uses custom release rules on a prerelease branch they might create a 'preprepatch' bump.
@@ -144,7 +169,7 @@ export default async function main() {
     }
 
     const releaseType: ReleaseType = isPrerelease
-      ? `pre${bump || defaultBump}`
+      ? `pre${bump}`
       : bump || defaultBump;
     core.setOutput('release_type', releaseType);
 
@@ -207,5 +232,5 @@ export default async function main() {
     return;
   }
 
-  await createTag(newTag, createAnnotatedTag, GITHUB_SHA);
+  await createTag(newTag, createAnnotatedTag, commitRef);
 }
