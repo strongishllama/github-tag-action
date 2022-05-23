@@ -48,7 +48,12 @@ export async function getScopedCommits(
 ) {
   return commits.filter((commit) => {
     return scopes.some((scope) => {
-      let re = new RegExp('^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)\\(' + scope + '\\)\\: [\\w ]+', 'g');
+      let re = new RegExp(
+        '^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)\\(' +
+          scope +
+          '\\)\\: [\\w ]+',
+        'g'
+      );
       return commit.message.match(re);
     });
   });
@@ -128,12 +133,38 @@ export function mapCustomReleaseRules(customReleaseTypes: string) {
       );
       const defaultRule = defaultChangelogRules[type.toLowerCase()];
 
-      return {
-        type,
-        release,
-        section: section || defaultRule?.section,
-      };
-    });
+      // NOTE: 
+      // Our desired behaviour is to trigger a "major" release if there is a breaking change
+      // in any commit type. Due to the ordering in https://github.com/semantic-release/commit-analyzer/blob/master/index.js#L47
+      // (analyzing custom rules first, and then if NONE match, analyzing the default rules) -
+      // if we define a custom release rule, we also need to add a corresponding breaking/major rule
+      // otherwise it will stop at the initial match even if it is a breaking commit
+      //
+      // E.g. 
+      // - Custom release rule "build:patch" ({type: "build", release: "patch"})
+      // - Commit message: "build(api): something\n\nBREAKING CHANGE: a breaking change"
+      //
+      // Will match "build" type, and output "patch" release BEFORE getting to the default {breaking: true, release: "major"} rule.
+      //
+      // With this change, a custom release rule of "build:patch" generates the following:
+      // - [{type: "build", release: "major", breaking: true}, {type: "build", release: "patch"}]
+      // And so will first match the breaking build commit rule, and generate a major release as desired
+      return [
+        {
+          type,
+          release: 'major',
+          section: section || defaultRule?.section,
+          breaking: true,
+        },
+        {
+          type,
+          release,
+          section: section || defaultRule?.section,
+          breaking: false,
+        },
+      ];
+    })
+    .flat();
 }
 
 export function mergeWithDefaultChangelogRules(
