@@ -127,6 +127,8 @@ export default async function main() {
       commits = await getScopedCommits(commits, validScopes.split(','));
     }
 
+    core.info(`mapped rules: ${JSON.stringify(mappedReleaseRules)}`);
+    core.info(`commits: ${JSON.stringify(commits)}`);
     let bump = await analyzeCommits(
       {
         releaseRules: mappedReleaseRules
