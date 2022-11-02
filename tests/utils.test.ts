@@ -224,6 +224,7 @@ describe('utils', () => {
         type: 'james',
         release: 'major',
         section: '007 Changes',
+        breaking: true,
       };
 
       /**
@@ -248,6 +249,7 @@ describe('utils', () => {
         type: 'feat',
         release: 'minor',
         section: '007 Changes',
+        breaking: false,
       };
 
       /**
@@ -267,8 +269,8 @@ describe('utils', () => {
        * Given
        */
       const mappedReleaseRules = [
-        { type: 'james', release: 'major', section: '007 Changes' },
-        { type: 'bond', release: 'minor', section: undefined },
+        { type: 'james', release: 'major', section: '007 Changes', breaking: true },
+        { type: 'bond', release: 'minor', section: undefined, breaking: false },
       ];
 
       /**
