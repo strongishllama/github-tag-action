@@ -122,9 +122,11 @@ export default async function main() {
     core.setOutput('previous_tag', previousTag.name);
 
     commits = await getCommits(previousTag.commit.sha, commitRef);
+    core.info(`No. of commits ${commits.length}`);
 
     if (validScopes) {
       commits = await getScopedCommits(commits, validScopes.split(','));
+      core.info(`No. of scoped commits ${commits.length}`);
     }
 
     let bump = await analyzeCommits(
